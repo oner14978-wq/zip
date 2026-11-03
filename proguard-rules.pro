@@ -1,0 +1,2 @@
+-keep class com.mclauncher.app.** { *; }
+-keep class com.getcapacitor.** { *; }

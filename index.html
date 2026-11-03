@@ -1,0 +1,118 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Launcher</title>
+<style>
+:root{--bg:#14161a;--p:#23272e;--g:#5fb236;--g2:#3d7d20;--t:#eee;--m:#9aa3ad}
+*{box-sizing:border-box;font-family:"Courier New",monospace;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:linear-gradient(#6fa8dc 0 45%,#5b8c2a 45% 55%,#6b4a2b 55%);color:var(--t);height:100vh;overflow:hidden}
+.s{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;background:rgba(10,12,15,.78);overflow:auto;animation:in .4s}
+.s.on{display:flex}@keyframes in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+h1{font-size:34px;letter-spacing:3px;text-shadow:3px 3px #000;margin:0;color:#fff}
+button,input,select{font-size:16px;padding:13px;border:3px solid #000;background:#555;color:#fff;width:100%;max-width:340px}
+button{background:var(--g);box-shadow:inset -4px -4px #0004,inset 4px 4px #fff3;cursor:pointer;transition:.15s}
+button:active{transform:scale(.95)}button.sec{background:#6b6f76}button.big{font-size:26px;padding:18px}
+#bar{width:260px;height:16px;border:3px solid #000;background:#222}#fill{height:100%;width:0;background:var(--g)}
+.av{width:72px;height:72px;border:3px solid #000;image-rendering:pixelated}
+.row{display:flex;gap:10px;width:100%;max-width:340px}.row>*{flex:1}
+.v{display:flex;justify-content:space-between;background:var(--p);border:2px solid #000;padding:10px;width:100%;max-width:340px;font-size:14px}
+.v.sel{outline:3px solid var(--g)}.v small{color:var(--m)}#list{width:100%;max-width:340px;max-height:50vh;overflow:auto;display:flex;flex-direction:column;gap:6px}
+#err{color:#ff7b7b;max-width:340px;font-size:13px;white-space:pre-wrap}#st{font-size:13px;color:var(--m);max-width:340px;text-align:center}
+</style></head><body>
+<div class="s on" id="splash"><h1>MINECRAFT</h1><div id="bar"><div id="fill"></div></div><div id="st">Carregando...</div></div>
+
+<div class="s" id="login"><h1>ENTRAR</h1><div class="av" id="avL"></div>
+<input id="nm" maxlength="16" placeholder="Nome do jogador">
+<select id="sk"><option value="#3a7bd5">Skin Steve</option><option value="#d5503a">Skin Alex</option><option value="#7a3ad5">Skin Roxa</option></select>
+<button onclick="doLogin()">ENTRAR (OFFLINE)</button><div id="st2" style="font-size:12px;color:var(--m)">Conta offline, sem autenticação Microsoft.</div></div>
+
+<div class="s" id="main"><h1>MINECRAFT</h1><div class="av" id="avM"></div><b id="pn"></b><div id="vsel" style="color:var(--m)"></div>
+<button class="big" onclick="play()">JOGAR</button>
+<button class="sec" onclick="go('vers')">INSTALAÇÕES</button><button class="sec" onclick="go('cfg')">CONFIGURAÇÕES</button><button class="sec" onclick="go('prof')">PERFIL</button><div id="err"></div></div>
+
+<div class="s" id="vers"><h1 style="font-size:24px">VERSÕES</h1><div id="list">Carregando manifesto...</div><div id="st3"></div><div id="bar2" style="display:none;width:300px" class="" ><div style="height:14px;border:3px solid #000;background:#222"><div id="f2" style="height:100%;width:0;background:var(--g)"></div></div></div><button class="sec" onclick="go('main')">VOLTAR</button></div>
+
+<div class="s" id="cfg"><h1 style="font-size:24px">CONFIGURAÇÕES</h1>
+RAM (MB)<input id="ram" type="number" value="2048" step="256">
+Resolução<select id="res"><option>854x480</option><option>1280x720</option><option>1920x1080</option></select>
+Renderizador<select id="rend"><option>gl4es</option><option>zink</option><option>virgl</option></select>
+Idioma<select id="lang"><option>pt_br</option><option>en_us</option><option>es_es</option></select>
+Pasta do jogo<input id="dir" value="minecraft">
+<button onclick="saveCfg()">SALVAR</button><button class="sec" onclick="clearCache()">LIMPAR CACHE</button><button class="sec" onclick="go('vers')">GERENCIAR VERSÕES</button><button class="sec" onclick="go('main')">VOLTAR</button></div>
+
+<div class="s" id="prof"><h1 style="font-size:24px">PERFIL</h1><div class="av" id="avP"></div><b id="pn2"></b><button class="sec" onclick="go('login')">TROCAR NOME / SKIN</button><button class="sec" onclick="go('main')">VOLTAR</button></div>
+
+<script>
+const $=i=>document.getElementById(i),L=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},W=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+let S=L('s',{name:'',skin:'#3a7bd5',ver:'1.21',ram:2048,res:'854x480',rend:'gl4es',lang:'pt_br',dir:'minecraft'}),inst=L('inst',{}),manifest=null;
+let _mc=null;
+function N(){
+  const C=window.Capacitor;
+  if(!C) return null;
+  // Só considera disponível se o plugin nativo foi realmente registrado pelo APK.
+  if(typeof C.isPluginAvailable==='function'&&!C.isPluginAvailable('MCNative')) return null;
+  // Capacitor pode expor plugins registrados por meio de Plugins (bridge legado).
+  if(C.Plugins&&C.Plugins.MCNative) return C.Plugins.MCNative;
+  // Algumas versões disponibilizam registerPlugin globalmente.
+  if(!_mc&&typeof C.registerPlugin==='function'){
+    try{_mc=C.registerPlugin('MCNative')}catch(e){console.warn('Falha ao registrar MCNative:',e)}
+  }
+  return _mc;
+}
+function requireNative(){
+  const n=N();
+  if(!n) throw Error('MCNative não está disponível. Abra este launcher dentro do APK Capacitor que registra MCNative; abrir o HTML no Chrome não ativa a ponte Android.');
+  return n;
+}
+function go(id){document.querySelectorAll('.s').forEach(e=>e.classList.remove('on'));$(id).classList.add('on');if(id=='main'){paint();syncInst().then(paint)}if(id=='vers')loadVers();if(id=='cfg'){['ram','res','rend','lang','dir'].forEach(k=>$(k).value=S[k])}if(id=='login'){$('nm').value=S.name;$('sk').value=S.skin}if(id=='prof')paint()}
+function paint(){['avL','avM','avP'].forEach(i=>$(i).style.background=S.skin);$('pn').textContent=$('pn2').textContent=S.name;$('vsel').textContent='Versão: '+S.ver+(inst[S.ver]?' (instalada)':' (não instalada)')}
+function doLogin(){const n=$('nm').value.trim();if(!/^\w{3,16}$/.test(n)){$('st2').textContent='Nome: 3 a 16 letras, números ou _';return}S.name=n;S.skin=$('sk').value;W('s',S);go('main')}
+function saveCfg(){['ram','res','rend','lang','dir'].forEach(k=>S[k]=$(k).value.trim());S.ram=+S.ram;if(!Number.isInteger(S.ram)||S.ram<512||S.ram>12288){alert('RAM inválida. Use um valor entre 512 e 12288 MB.');return}if(!S.dir||S.dir.includes('..')||/[\\]/.test(S.dir)){alert('Nome da pasta inválido. Use um nome simples, sem \\ ou ..');return}W('s',S);go('main')}
+async function clearCache(){try{const n=requireNative();if(typeof n.clearCache!=='function')throw Error('O APK não implementa MCNative.clearCache.');const r=await n.clearCache({dir:S.dir});if(r&&r.ok===false)throw Error(r.error||'Não foi possível limpar o cache.');alert('Cache limpo')}catch(e){alert('Erro: '+(e.message||e))}}
+async function j(u){const r=await fetch(u);if(!r.ok)throw Error('HTTP '+r.status+' '+u);return r.json()}
+async function refreshInst(ids){const n=N(),r={};for(const id of ids){if(!n||typeof n.verify!=='function'){r[id]=0;continue}try{const c=await n.verify({dir:S.dir,version:id,quick:true});r[id]=c&&c.ok===true?1:0}catch{r[id]=0}}return r}
+async function syncInst(){const ids=[...new Set(Object.keys(inst).concat(S.ver?[S.ver]:[]))];inst=await refreshInst(ids);if(N())W('inst',inst)}
+async function loadVers(){try{if(!manifest)manifest=await j('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
+ await syncInst();
+ const all=manifest.versions.filter(v=>v.type=='release'),l=all.slice(0,40);const cur=all.find(v=>v.id==S.ver);if(cur&&!l.includes(cur))l.push(cur);$('list').innerHTML='';
+ l.forEach(v=>{const d=document.createElement('div');d.className='v'+(v.id==S.ver?' sel':'');d.innerHTML=`<span>${v.id}<br><small>${v.type}</small></span><span>${inst[v.id]?'✔ instalada':'instalar ▸'}</span>`;
+ d.onclick=()=>pick(v);$('list').appendChild(d)})}catch(e){$('list').textContent='Falha ao obter manifesto: '+e.message}}
+async function pick(v){S.ver=v.id;W('s',S);if(inst[v.id]){loadVers();return}await install(v)}
+function bar(p,t){$('bar2').style.display='block';$('f2').style.width=Math.min(100,p)+'%';$('st3').textContent=t}
+function libAllowed(l){if(!l.rules)return true;let ok=false;for(const r of l.rules){const o=r.os,m=!o||((!o.name||o.name=='linux')&&(!o.arch||/^(arm64|aarch64)$/.test(o.arch)));if(m)ok=r.action=='allow'}return ok}
+let busy=false;
+async function install(v){if(busy)return;busy=true;let h=null;try{const n=requireNative();if(typeof n.downloadAll!=='function'||typeof n.verify!=='function'||typeof n.addListener!=='function')throw Error('O APK encontrou MCNative, mas faltam os métodos downloadAll, verify ou addListener. Atualize o plugin nativo.');
+ bar(0,'Lendo metadados...');const vj=await j(v.url),M=new Map(),base=S.dir+'/',add=f=>{if(f&&f.url&&f.sha1&&!M.has(f.path))M.set(f.path,f)};
+ const c=vj.downloads.client;add({url:c.url,path:`${base}versions/${v.id}/${v.id}.jar`,sha1:c.sha1,size:c.size});
+ for(const l of vj.libraries){if(!libAllowed(l))continue;const d=l.downloads||{};
+  if(d.artifact)add({url:d.artifact.url,path:base+'libraries/'+d.artifact.path,sha1:d.artifact.sha1,size:d.artifact.size});
+  if(l.natives&&l.natives.linux&&d.classifiers){const q=d.classifiers[l.natives.linux.replace('${arch}','64')];if(q)add({url:q.url,path:base+'libraries/'+q.path,sha1:q.sha1,size:q.size})}}
+ const lg=vj.logging&&vj.logging.client&&vj.logging.client.file;if(lg)add({url:lg.url,path:`${base}assets/log_configs/${lg.id}`,sha1:lg.sha1,size:lg.size});
+ bar(0,'Lendo índice de assets...');const ai=await j(vj.assetIndex.url);add({url:vj.assetIndex.url,path:`${base}assets/indexes/${vj.assetIndex.id}.json`,sha1:vj.assetIndex.sha1,size:vj.assetIndex.size});
+ for(const k in ai.objects){const o=ai.objects[k],x=o.hash;add({url:`https://resources.download.minecraft.net/${x.slice(0,2)}/${x}`,path:`${base}assets/objects/${x.slice(0,2)}/${x}`,sha1:x,size:o.size})}
+ const hashed=[...M.values()],all=hashed.concat([{inline:JSON.stringify(vj),path:`${base}versions/${v.id}/${v.id}.json`}]);
+ const mb=x=>(x/1048576).toFixed(1)+' MB';let todo=all,ok=false,last=[];
+ for(let t=1;t<=3&&!ok;t++){const tot=todo.reduce((a,f)=>a+(f.size||0),0)||1;
+  if(h){h.remove();h=null}
+  h=await n.addListener('progress',e=>bar(e.bytes/tot*100,`${mb(e.bytes)} / ${mb(tot)} (${e.done}/${todo.length} arquivos)`+(t>1?` — tentativa ${t}`:'')));
+  await n.downloadAll({dir:S.dir,files:todo,overwrite:t>1});
+  bar(100,'Verificando arquivos (SHA-1)...');
+  const chk=await n.verify({dir:S.dir,version:v.id,sha1:true,files:hashed.map(f=>({path:f.path,sha1:f.sha1,size:f.size}))});
+  if(chk&&chk.ok===true){ok=true;break}
+  last=(chk&&chk.missing)||[];
+  todo=all.filter(f=>last.some(m=>m==f.path||f.path.endsWith(m)||String(m).endsWith(f.path)));
+  if(!todo.length)throw Error('Verificação falhou: '+(last.slice(0,5).join(', ')||'resposta inválida do plugin'))}
+ if(!ok)throw Error('Arquivos ainda ausentes/corrompidos após 3 tentativas: '+last.slice(0,5).join(', '));
+ inst[v.id]=1;W('inst',inst);bar(100,`Instalação concluída e verificada (SHA-1): ${hashed.length} arquivos.`);loadVers()}
+ catch(e){$('st3').textContent='ERRO: '+(e.message||e)}
+ finally{if(h)h.remove();busy=false}}
+async function play(){const er=$('err');er.textContent='';try{
+ if(!S.ver)throw Error('Nenhuma versão selecionada.');
+ const n=requireNative();if(typeof n.verify!=='function'||typeof n.prepareJava!=='function'||typeof n.launch!=='function')throw Error('O APK não possui todos os métodos necessários do MCNative (verify, prepareJava e launch).');
+ await syncInst();if(!inst[S.ver])throw Error('Versão '+S.ver+' não instalada. Vá em INSTALAÇÕES.');
+ const chk=await n.verify({dir:S.dir,version:S.ver,sha1:true});if(!chk||chk.ok!==true)throw Error('Arquivos ausentes/corrompidos: '+((chk&&chk.missing)||[]).join(', '));
+ const jr=await n.prepareJava({major:21});if(!jr.ok)throw Error('Java 21 ARM64 indisponível: '+jr.error);
+ const [w,h]=S.res.split('x');await n.launch({version:S.ver,dir:S.dir,username:S.name,ramMb:S.ram,width:+w,height:+h,renderer:S.rend,lang:S.lang})}
+ catch(e){er.textContent='ERRO: '+(e.message||e)}}
+// Autoteste JS -> Kotlin (ping com eco). Nunca mostra sucesso se a ponte falhar.
+(async()=>{const st=$('st');try{const n=requireNative();const r=await n.ping({msg:'js->kotlin'});if(!r||r.ok!==true||r.echo!=='js->kotlin')throw Error('MCNative.ping retornou resposta inválida');window.__MC_STATUS=r;st.textContent='MCNative OK • v'+r.version+' • '+r.abi;console.log('MCNative OK',r)}catch(e){window.__MC_STATUS={ok:false,error:String(e.message||e)};st.textContent='ERRO: '+(e.message||e);st.style.color='#ff7b7b';console.error(e)}})();
+let p=0;const t=setInterval(()=>{p+=4;$('fill').style.width=p+'%';if(p>=100){clearInterval(t);go(S.name?'main':'login')}},80);
+</script></body></html>
